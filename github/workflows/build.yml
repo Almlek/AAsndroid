@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) سحب الكود
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2) تهيئة JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 3) تهيئة Android SDK مع قبول التراخيص تلقائياً
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+
+      # 4) تأكيد قبول التراخيص (خطوة احتياطية)
+      - name: Accept Android SDK Licenses (fallback)
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+
+      # 5) منح صلاحية تنفيذ gradlew
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # 6) إنشاء local.properties إذا لم يكن موجوداً
+      - name: Create local.properties
+        run: |
+          if [ ! -f local.properties ]; then
+            echo "sdk.dir=$ANDROID_HOME" > local.properties
+          fi
+
+      # 7) بناء APK للنسخة Debug
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      # 8) رفع APK كـ Artifact
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SchoolGrades-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
